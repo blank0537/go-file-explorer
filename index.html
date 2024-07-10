@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Path}}</title>
+  <style>
+    .actions {
+      display: flex;
+      padding-bottom: 10px;
+      justify-content: right;
+    }
+
+    .actions button {
+      margin-left: 10px;
+    }
+
+    dialog {
+      position: absolute;
+      top: 50%;
+    }
+  </style>
+</head>
+
+<body>
+  <h1 class="path">
+    Path: {{.Path}}
+  </h1>
+  <div class="actions">
+    <button onclick="toggleDialog('folder')">Create Folder</button>
+    <button onclick="toggleDialog('file')">Create File</button>
+  </div>
+  {{if .IsRoot}}
+  <a href="{{.Prev}}">&lt; Back</a>
+  {{end}}
+  {{if gt (len .Files) 0}}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Size</th>
+        <th>Modified</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Files}}
+      <tr>
+        <!-- <td><a href="{{if .IsDir}}/{{.Name}}{{else}}{{.Name}}{{end}}">{{.Name}}</a></td> -->
+        <td><a href="{{.Path}}">{{if .IsDir}}/{{.Name}}{{else}}{{.Name}}{{end}}</a></td>
+        <td>{{if .IsDir}}-{{else}}{{.Size}}{{end}}</td>
+        <td>{{.ModTime}}</td>
+        <td>
+          <button onclick="toggleDialog('delete', '{{.Name}}')">Delete</button>
+          <button onclick="toggleDialog('rename', '{{.Name}}')">Rename</button>
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <h3>No folders or files</h3>
+  {{end}}
+  <dialog id="create-folder-wrap">
+    <button onclick="toggleDialog('folder')">X</button>
+    <input type="text">
+    <button onclick="dialogAction('folder')">Create Folder</button>
+  </dialog>
+  <dialog id="create-file-wrap">
+    <button onclick="toggleDialog('file')">X</button>
+    <input type="text">
+    <button onclick="dialogAction('file')">Create File</button>
+  </dialog>
+  <dialog id="rename-wrap">
+    <button onclick="toggleDialog('rename')">X</button>
+    <input type="text">
+    <button onclick="dialogAction('rename')">Rename</button>
+  </dialog>
+  <dialog id="delete-wrap">
+    <p>Are you sure You want to delete?</p>
+    <button onclick="dialogAction('delete')">Yes</button>
+    <button onclick="toggleDialog('delete')">No</button>
+  </dialog>
+</body>
+
+<script>
+  let obj = { name: '', path: '' };
+  async function postCall(api, payload) {
+    let res = await fetch(`http://localhost:8800/${api}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    res = await res.json()
+    return res
+  }
+  async function dialogAction(actionType) {
+    const inputElm = document.querySelector('[open] input');
+    let payload = {}
+    if (inputElm && actionType != 'delete') {
+      const val = inputElm.value;
+      if (!val) {
+        return;
+      }
+      payload.name = val;
+      payload.path = window.location.pathname.replaceAll('%20', ' ');
+    }
+    if (actionType === 'folder') {
+      const res = await postCall('create/folder', payload)
+    } else if (actionType === 'file') {
+      const res = await postCall('create/file', payload)
+    } else if (actionType === 'rename') {
+      payload.newName = payload.name
+      payload.name = obj.name
+      payload.path = obj.path
+      const res = await postCall('rename', payload)
+    } else if (actionType === 'delete') {
+      payload = obj;
+      const res = await postCall('delete', payload)
+    }
+    window.location.reload()
+    toggleDialog(actionType);
+  }
+
+  function toggleDialog(actionType, fileName = '') {
+    let dialogElm;
+    if (actionType === 'folder') {
+      dialogElm = document.querySelector('#create-folder-wrap');
+    } else if (actionType === 'file') {
+      dialogElm = document.querySelector('#create-file-wrap');
+    } else if (actionType === 'rename') {
+      dialogElm = document.querySelector('#rename-wrap');
+      obj.name = fileName
+      obj.path = window.location.pathname.replaceAll('%20', ' ')
+      dialogElm.querySelector('input').value = fileName
+    } else if (actionType === 'delete') {
+      dialogElm = document.querySelector('#delete-wrap');
+      obj.name = fileName
+      obj.path = window.location.pathname.replaceAll('%20', ' ')
+    }
+
+    if (!dialogElm) {
+      return;
+    }
+    if (dialogElm.hasAttribute("open")) {
+      dialogElm.close()
+    } else {
+      dialogElm.showModal()
+    }
+  }
+</script>
+
+</html>
